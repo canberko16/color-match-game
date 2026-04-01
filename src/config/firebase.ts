@@ -1,16 +1,16 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
 
-// Firebase yapılandırması
+// Firebase yapılandırması — env değişkenlerinden okunur
 const firebaseConfig = {
-  apiKey: 'REMOVED',
-  authDomain: 'colormatch-ca6fd.firebaseapp.com',
-  databaseURL: 'https://colormatch-ca6fd-default-rtdb.europe-west1.firebasedatabase.app',
-  projectId: 'colormatch-ca6fd',
-  storageBucket: 'colormatch-ca6fd.firebasestorage.app',
-  messagingSenderId: '506380169355',
-  appId: '1:506380169355:web:aec73e0b60719e843b248e',
-  measurementId: 'G-XD2SBETMGN',
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  databaseURL: process.env.EXPO_PUBLIC_FIREBASE_DATABASE_URL,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 // Expo hot-reload'da birden fazla initialize olmasını önle
