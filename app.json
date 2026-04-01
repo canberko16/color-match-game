@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "Color Match",
+    "slug": "color-match",
+    "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0A18",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0A18"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.colormatch.app",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "requireFullScreen": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIRequiresFullScreen": true
+      }
+    },
+    "android": {
+      "package": "com.colormatch.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A0A18"
+      },
+      "permissions": []
+    },
+    "extra": {
+      "eas": {
+        "projectId": "9e4f6dba-f418-4c06-bd41-0611b6cb6d13"
+      }
+    },
+    "plugins": [],
+    "owner": "canberkakatay16"
+  }
+}
