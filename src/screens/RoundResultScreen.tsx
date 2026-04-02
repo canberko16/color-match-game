@@ -7,12 +7,16 @@ import {
   Animated,
   SafeAreaView,
   ScrollView,
+  Modal,
+  PanResponder,
+  Dimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { RoundResult } from '../types';
+import { RoundResult, RGB } from '../types';
 import {
   rgbToHex,
+  rgbToString,
   getScoreComment,
   getScoreEmoji,
   getScoreColor,
@@ -20,6 +24,8 @@ import {
 import ColorSwatch from '../components/ColorSwatch';
 import RoundHistory from '../components/RoundHistory';
 import { COLORS, FONT_SIZE, SPACING, RADIUS } from '../constants/theme';
+
+const { height: SCREEN_H } = Dimensions.get('window');
 
 interface Props {
   result: RoundResult;
@@ -39,14 +45,46 @@ const RoundResultScreen: React.FC<Props> = ({
   const { targetColor, guessedColor, score, round } = result;
 
   const [displayScore, setDisplayScore] = useState(0);
-  const [isNavigating, setIsNavigating] = useState(false); // double-tap önleme
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [zoomColor, setZoomColor]       = useState<RGB | null>(null);
+  const [zoomLabel, setZoomLabel]       = useState('');
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const zoomSlide = useRef(new Animated.Value(SCREEN_H)).current;
+
+  const closeZoom = useCallback(() => {
+    Animated.timing(zoomSlide, { toValue: SCREEN_H, duration: 260, useNativeDriver: true }).start(() => {
+      setZoomColor(null);
+    });
+  }, [zoomSlide]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        if (g.dy > 0) zoomSlide.setValue(g.dy);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 80) {
+          closeZoom();
+        } else {
+          Animated.spring(zoomSlide, { toValue: 0, useNativeDriver: true, tension: 60, friction: 10 }).start();
+        }
+      },
+    })
+  ).current;
+
+  const openZoom = useCallback((color: RGB, label: string) => {
+    setZoomColor(color);
+    setZoomLabel(label);
+    zoomSlide.setValue(SCREEN_H);
+    Animated.spring(zoomSlide, { toValue: 0, useNativeDriver: true, tension: 55, friction: 9 }).start();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }, [zoomSlide]);
 
   useEffect(() => {
-    // Skor kalitesine göre haptic
     if (score >= 80) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } else if (score >= 50) {
@@ -55,31 +93,21 @@ const RoundResultScreen: React.FC<Props> = ({
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     }
 
-    // Giriş animasyonu
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
       Animated.spring(slideAnim, { toValue: 0, tension: 55, friction: 8, useNativeDriver: true }),
       Animated.spring(scaleAnim, { toValue: 1, tension: 60, friction: 7, useNativeDriver: true }),
     ]).start();
 
-    // Skor sayacı — score 0 ise animasyon gereksiz
-    if (score === 0) {
-      setDisplayScore(0);
-      return;
-    }
+    if (score === 0) { setDisplayScore(0); return; }
 
     let current = 0;
-    const step = Math.max(1, Math.ceil(score / 30)); // minimum 1 adım
+    const step = Math.max(1, Math.ceil(score / 30));
     const interval = setInterval(() => {
       current += step;
-      if (current >= score) {
-        setDisplayScore(score);
-        clearInterval(interval);
-      } else {
-        setDisplayScore(current);
-      }
+      if (current >= score) { setDisplayScore(score); clearInterval(interval); }
+      else setDisplayScore(current);
     }, 20);
-
     return () => clearInterval(interval);
   }, [score]);
 
@@ -94,13 +122,9 @@ const RoundResultScreen: React.FC<Props> = ({
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe}>
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Animated.View
-            style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
-          >
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+
             {/* ── Header ── */}
             <View style={styles.header}>
               <Text style={styles.roundLabel}>Round {round} / {totalRounds}</Text>
@@ -114,34 +138,40 @@ const RoundResultScreen: React.FC<Props> = ({
                 <Text style={[styles.scoreMax, { color: scoreColor + 'AA' }]}> / 100</Text>
               </View>
               <Text style={styles.scoreEmoji}>{getScoreEmoji(score)}</Text>
-              <Text style={[styles.scoreComment, { color: scoreColor }]}>
-                {getScoreComment(score)}
-              </Text>
+              <Text style={[styles.scoreComment, { color: scoreColor }]}>{getScoreComment(score)}</Text>
             </Animated.View>
 
             {/* ── Renk karşılaştırması ── */}
             <View style={styles.comparisonSection}>
               <Text style={styles.sectionTitle}>Renk karşılaştırması</Text>
               <View style={styles.swatchRow}>
-                <View style={styles.swatchItem}>
+                <TouchableOpacity
+                  style={styles.swatchItem}
+                  activeOpacity={0.8}
+                  onPress={() => openZoom(targetColor, 'Gerçek Renk')}
+                >
                   <ColorSwatch color={targetColor} size={130} animateIn />
                   <Text style={styles.swatchLabel}>Gerçek</Text>
                   <Text style={styles.swatchHex}>{rgbToHex(targetColor)}</Text>
-                  <Text style={styles.swatchRGB}>
-                    {targetColor.r} · {targetColor.g} · {targetColor.b}
-                  </Text>
-                </View>
+                  <Text style={styles.swatchRGB}>{targetColor.r} · {targetColor.g} · {targetColor.b}</Text>
+                  <Text style={styles.swatchTap}>büyüt →</Text>
+                </TouchableOpacity>
+
                 <View style={styles.vsDivider}>
                   <Text style={styles.vsText}>vs</Text>
                 </View>
-                <View style={styles.swatchItem}>
+
+                <TouchableOpacity
+                  style={styles.swatchItem}
+                  activeOpacity={0.8}
+                  onPress={() => openZoom(guessedColor, 'Tahminin')}
+                >
                   <ColorSwatch color={guessedColor} size={130} animateIn />
                   <Text style={styles.swatchLabel}>Tahminin</Text>
                   <Text style={styles.swatchHex}>{rgbToHex(guessedColor)}</Text>
-                  <Text style={styles.swatchRGB}>
-                    {guessedColor.r} · {guessedColor.g} · {guessedColor.b}
-                  </Text>
-                </View>
+                  <Text style={styles.swatchRGB}>{guessedColor.r} · {guessedColor.g} · {guessedColor.b}</Text>
+                  <Text style={styles.swatchTap}>büyüt →</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -167,6 +197,37 @@ const RoundResultScreen: React.FC<Props> = ({
           </Animated.View>
         </ScrollView>
       </SafeAreaView>
+
+      {/* ── Renk Zoom Modal ── */}
+      <Modal visible={!!zoomColor} transparent animationType="none" onRequestClose={closeZoom}>
+        <Animated.View
+          style={[styles.zoomOverlay, { transform: [{ translateY: zoomSlide }] }]}
+          {...panResponder.panHandlers}
+        >
+          <SafeAreaView style={styles.zoomSafe}>
+            <View style={styles.zoomTopBar}>
+              <View style={styles.zoomHandle} />
+              <TouchableOpacity onPress={closeZoom} style={styles.zoomCloseBtn}>
+                <Text style={styles.zoomCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {zoomColor && (
+              <>
+                <View style={[styles.zoomColorBlock, { backgroundColor: rgbToString(zoomColor) }]} />
+                <View style={styles.zoomInfo}>
+                  <Text style={styles.zoomLabel}>{zoomLabel}</Text>
+                  <Text style={styles.zoomHex}>{rgbToHex(zoomColor)}</Text>
+                  <Text style={styles.zoomRGB}>
+                    R {zoomColor.r}  ·  G {zoomColor.g}  ·  B {zoomColor.b}
+                  </Text>
+                </View>
+                <Text style={styles.zoomHint}>Aşağı kaydır veya ✕ ile kapat</Text>
+              </>
+            )}
+          </SafeAreaView>
+        </Animated.View>
+      </Modal>
     </View>
   );
 };
@@ -189,9 +250,9 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderRadius: RADIUS.round, paddingHorizontal: SPACING.xl,
     paddingVertical: SPACING.sm, backgroundColor: COLORS.surfaceElevated,
   },
-  scoreNumber: { fontSize: FONT_SIZE.giant, fontWeight: '900', lineHeight: 80 },
-  scoreMax:    { fontSize: FONT_SIZE.lg, fontWeight: '700', marginBottom: 10, marginLeft: 4 },
-  scoreEmoji:  { fontSize: 36, marginBottom: SPACING.xs },
+  scoreNumber:  { fontSize: FONT_SIZE.giant, fontWeight: '900', lineHeight: 80 },
+  scoreMax:     { fontSize: FONT_SIZE.lg, fontWeight: '700', marginBottom: 10, marginLeft: 4 },
+  scoreEmoji:   { fontSize: 36, marginBottom: SPACING.xs },
   scoreComment: { fontSize: FONT_SIZE.lg, fontWeight: '800', letterSpacing: 0.3 },
 
   comparisonSection: { marginBottom: SPACING.lg },
@@ -199,11 +260,12 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary, fontSize: FONT_SIZE.sm, fontWeight: '700',
     letterSpacing: 0.5, textTransform: 'uppercase', textAlign: 'center', marginBottom: SPACING.lg,
   },
-  swatchRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: SPACING.md },
-  swatchItem: { alignItems: 'center', flex: 1, gap: SPACING.xs },
+  swatchRow:   { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: SPACING.md },
+  swatchItem:  { alignItems: 'center', flex: 1, gap: SPACING.xs },
   swatchLabel: { color: COLORS.text, fontSize: FONT_SIZE.sm, fontWeight: '700', marginTop: SPACING.xs },
   swatchHex:   { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs, fontWeight: '600' },
   swatchRGB:   { color: COLORS.textMuted, fontSize: FONT_SIZE.xs },
+  swatchTap:   { color: '#6C63FF99', fontSize: 10, fontWeight: '700' },
   vsDivider:   { width: 36, alignItems: 'center' },
   vsText:      { color: COLORS.textMuted, fontSize: FONT_SIZE.sm, fontWeight: '800', letterSpacing: 1 },
 
@@ -212,8 +274,34 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.lg, borderWidth: 1, borderColor: COLORS.border,
   },
 
-  nextButton: { height: 58, borderRadius: RADIUS.round, justifyContent: 'center', alignItems: 'center' },
+  nextButton:     { height: 58, borderRadius: RADIUS.round, justifyContent: 'center', alignItems: 'center' },
   nextButtonText: { color: '#FFF', fontSize: FONT_SIZE.lg, fontWeight: '800', letterSpacing: 0.5 },
+
+  // Zoom
+  zoomOverlay: { flex: 1, backgroundColor: COLORS.background },
+  zoomSafe:    { flex: 1 },
+  zoomTopBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, position: 'relative',
+  },
+  zoomHandle: {
+    width: 40, height: 4, backgroundColor: COLORS.border, borderRadius: 2, alignSelf: 'center',
+  },
+  zoomCloseBtn: {
+    position: 'absolute', right: SPACING.lg,
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center',
+  },
+  zoomCloseText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.md, fontWeight: '700' },
+  zoomColorBlock: {
+    marginHorizontal: SPACING.xl, flex: 1, borderRadius: RADIUS.xl,
+    maxHeight: 380, minHeight: 220,
+  },
+  zoomInfo:  { alignItems: 'center', paddingVertical: SPACING.xl, gap: SPACING.xs },
+  zoomLabel: { color: COLORS.text, fontSize: FONT_SIZE.lg, fontWeight: '800' },
+  zoomHex:   { color: COLORS.textSecondary, fontSize: FONT_SIZE.xl, fontWeight: '700', letterSpacing: 2 },
+  zoomRGB:   { color: COLORS.textMuted, fontSize: FONT_SIZE.md, letterSpacing: 1 },
+  zoomHint:  { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, textAlign: 'center', paddingBottom: SPACING.xl },
 });
 
 export default RoundResultScreen;

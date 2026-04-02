@@ -3,7 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import { Screen, GameMode, RGB, RoundResult } from './src/types';
 import { generateRandomColor, calculateScore } from './src/utils/colorUtils';
-import { getHighScore, saveHighScore } from './src/utils/storage';
+import { getHighScore, saveHighScore, saveGameRecord } from './src/utils/storage';
 import { getUserId, getTrophies, updateTrophies } from './src/utils/userProfile';
 import {
   joinQueue,
@@ -138,6 +138,12 @@ export default function App() {
           const isNew = await saveHighScore(avg);
           setIsNewHighScore(isNew);
           if (isNew) setHighScore(avg);
+          await saveGameRecord({
+            date: new Date().toISOString(),
+            averageScore: avg,
+            totalScore: updatedRounds.reduce((s, r) => s + r.score, 0),
+            rounds: updatedRounds.length,
+          });
         } catch (e) {
           console.warn('[App] high score kaydedilemedi:', e);
         }

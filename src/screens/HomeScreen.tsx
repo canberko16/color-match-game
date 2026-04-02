@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,18 @@ import {
   StyleSheet,
   Animated,
   SafeAreaView,
+  Modal,
+  Linking,
+  ScrollView,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { getTier, Tier } from '../utils/mmr';
+import { getTopScores, GameRecord } from '../utils/storage';
+import { getScoreColor } from '../utils/colorUtils';
 import { COLORS, FONT_SIZE, SPACING, RADIUS } from '../constants/theme';
+
+const APP_STORE_ID    = '6761482277';
+const GITHUB_ISSUES   = 'https://github.com/canberko16/color-match-game/issues/new';
 
 interface Blob {
   color: string;
@@ -37,6 +45,9 @@ const HomeScreen: React.FC<Props> = ({ onPlay, onCompetitive, highScore, trophie
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
 
+  const [showTop5, setShowTop5]   = useState(false);
+  const [topScores, setTopScores] = useState<GameRecord[]>([]);
+
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim,  { toValue: 1, duration: 700, useNativeDriver: true }),
@@ -44,17 +55,34 @@ const HomeScreen: React.FC<Props> = ({ onPlay, onCompetitive, highScore, trophie
     ]).start();
   }, []);
 
-  // useCallback — child'a stabil referans geçer
+  const handleShowTop5 = useCallback(async () => {
+    const scores = await getTopScores();
+    setTopScores(scores);
+    setShowTop5(true);
+  }, []);
+
   const handlePlay        = useCallback(() => onPlay(), [onPlay]);
   const handleCompetitive = useCallback(() => onCompetitive(), [onCompetitive]);
 
+  const handleBugReport = useCallback(() => {
+    Linking.openURL(GITHUB_ISSUES).catch(() => {});
+  }, []);
+
+  const handleRateApp = useCallback(() => {
+    Linking.openURL(
+      `https://apps.apple.com/app/id${APP_STORE_ID}?action=write-review`
+    ).catch(() => {});
+  }, []);
+
   const tier: Tier = getTier(trophies);
+
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getDate().toString().padStart(2,'0')}.${(d.getMonth()+1).toString().padStart(2,'0')}.${d.getFullYear()}`;
+  };
 
   return (
     <View style={styles.container}>
-      {/* StatusBar App.tsx'te tek yerden yönetilir — burada duplicate yok */}
-
-      {/* Arka plan renk bloblari */}
       {BLOBS.map((blob, i) => (
         <View
           key={i}
@@ -98,10 +126,15 @@ const HomeScreen: React.FC<Props> = ({ onPlay, onCompetitive, highScore, trophie
               </View>
             </View>
             {highScore > 0 && (
-              <View style={styles.highScoreCard}>
+              <TouchableOpacity
+                style={styles.highScoreCard}
+                onPress={handleShowTop5}
+                activeOpacity={0.75}
+              >
                 <Text style={styles.highScoreLabel}>En iyi</Text>
                 <Text style={styles.highScoreValue}>{highScore}</Text>
-              </View>
+                <Text style={styles.highScoreTap}>Top 5 →</Text>
+              </TouchableOpacity>
             )}
           </View>
 
@@ -127,7 +160,6 @@ const HomeScreen: React.FC<Props> = ({ onPlay, onCompetitive, highScore, trophie
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* Yakında — pasif */}
             <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.6} disabled>
               <Text style={styles.secondaryButtonText}>👥  Arkadaşınla Oyna</Text>
               <View style={styles.badge}>
@@ -136,9 +168,68 @@ const HomeScreen: React.FC<Props> = ({ onPlay, onCompetitive, highScore, trophie
             </TouchableOpacity>
           </View>
 
+          {/* ── Alt aksiyonlar ── */}
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={styles.actionBtn} onPress={handleRateApp} activeOpacity={0.75}>
+              <Text style={styles.actionBtnText}>⭐ Puan Ver</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn} onPress={handleBugReport} activeOpacity={0.75}>
+              <Text style={styles.actionBtnText}>🐛 Hata Bildir</Text>
+            </TouchableOpacity>
+          </View>
+
           <Text style={styles.copyright}>© 2026 Color Match. All rights reserved.</Text>
         </Animated.View>
       </SafeAreaView>
+
+      {/* ── Top 5 Modal ── */}
+      <Modal
+        visible={showTop5}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowTop5(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>🏆 En İyi 5 Oyun</Text>
+              <TouchableOpacity onPress={() => setShowTop5(false)} style={styles.closeBtn}>
+                <Text style={styles.closeBtnText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {topScores.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>Henüz kayıtlı oyun yok.</Text>
+                <Text style={styles.emptySubText}>Oyna ve skoru burada gör!</Text>
+              </View>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {topScores.map((rec, i) => {
+                  const sc      = getScoreColor(rec.averageScore);
+                  const medals  = ['🥇', '🥈', '🥉', '4.', '5.'];
+                  return (
+                    <View key={i} style={styles.scoreRow}>
+                      <Text style={styles.scoreRank}>{medals[i]}</Text>
+                      <View style={styles.scoreInfo}>
+                        <Text style={[styles.scoreAvg, { color: sc }]}>
+                          {rec.averageScore} ort.
+                        </Text>
+                        <Text style={styles.scoreDate}>{formatDate(rec.date)}</Text>
+                      </View>
+                      <View style={styles.scoreTotalBox}>
+                        <Text style={styles.scoreTotalLabel}>Toplam</Text>
+                        <Text style={[styles.scoreTotalVal, { color: sc }]}>{rec.totalScore}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -170,12 +261,13 @@ const styles = StyleSheet.create({
   highScoreCard: {
     backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SPACING.md,
     alignItems: 'center', justifyContent: 'center', borderWidth: 1,
-    borderColor: '#6C63FF44', minWidth: 72,
+    borderColor: '#6C63FF44', minWidth: 80,
   },
   highScoreLabel: { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, fontWeight: '600', marginBottom: 2 },
   highScoreValue: { color: '#A78BFA', fontSize: FONT_SIZE.lg, fontWeight: '900' },
+  highScoreTap:   { color: '#6C63FF99', fontSize: 10, fontWeight: '700', marginTop: 3 },
 
-  buttons:       { gap: SPACING.md, marginBottom: SPACING.xl },
+  buttons:       { gap: SPACING.md, marginBottom: SPACING.lg },
   primaryButton: { height: 56, borderRadius: RADIUS.round, justifyContent: 'center', alignItems: 'center' },
   primaryButtonText: { color: '#FFF', fontSize: FONT_SIZE.lg, fontWeight: '800', letterSpacing: 0.5 },
   secondaryButton: {
@@ -190,7 +282,50 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, fontWeight: '700' },
 
+  actionRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.lg },
+  actionBtn: {
+    flex: 1, height: 42, backgroundColor: COLORS.surface, borderRadius: RADIUS.lg,
+    borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center',
+  },
+  actionBtnText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.sm, fontWeight: '700' },
+
   copyright: { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, textAlign: 'center', letterSpacing: 0.2 },
+
+  // Modal
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: COLORS.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: SPACING.xl, paddingTop: SPACING.lg, paddingBottom: 44, minHeight: 320,
+  },
+  modalHandle: {
+    width: 40, height: 4, backgroundColor: COLORS.border, borderRadius: 2,
+    alignSelf: 'center', marginBottom: SPACING.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginBottom: SPACING.lg,
+  },
+  modalTitle:   { color: COLORS.text, fontSize: FONT_SIZE.lg, fontWeight: '800' },
+  closeBtn:     { padding: SPACING.xs },
+  closeBtnText: { color: COLORS.textMuted, fontSize: FONT_SIZE.lg, fontWeight: '700' },
+
+  emptyState:   { alignItems: 'center', paddingVertical: SPACING.xxl },
+  emptyText:    { color: COLORS.textSecondary, fontSize: FONT_SIZE.md, fontWeight: '600', marginBottom: SPACING.xs },
+  emptySubText: { color: COLORS.textMuted, fontSize: FONT_SIZE.sm },
+
+  scoreRow: {
+    flexDirection: 'row', alignItems: 'center', gap: SPACING.md,
+    paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.border,
+  },
+  scoreRank:       { fontSize: 22, width: 34, textAlign: 'center' },
+  scoreInfo:       { flex: 1 },
+  scoreAvg:        { fontSize: FONT_SIZE.lg, fontWeight: '900' },
+  scoreDate:       { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, marginTop: 2 },
+  scoreTotalBox:   { alignItems: 'flex-end' },
+  scoreTotalLabel: { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, fontWeight: '600' },
+  scoreTotalVal:   { fontSize: FONT_SIZE.md, fontWeight: '800' },
 });
 
 export default HomeScreen;
