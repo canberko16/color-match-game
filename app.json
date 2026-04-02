@@ -19,8 +19,8 @@
       "**/*"
     ],
     "ios": {
-      "bundleIdentifier": "com.colormatch.app",
-      "buildNumber": "1",
+      "bundleIdentifier": "com.canberkakatay.colormatch",
+      "buildNumber": "4",
       "supportsTablet": false,
       "requireFullScreen": true,
       "infoPlist": {
@@ -29,7 +29,7 @@
       }
     },
     "android": {
-      "package": "com.colormatch.app",
+      "package": "com.canberkakatay.colormatch",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

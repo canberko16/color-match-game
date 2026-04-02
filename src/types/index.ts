@@ -22,6 +22,7 @@ export type Screen =
   | 'gameOver'       // Solo bitiş ekranı
   | 'matchmaking'    // Competitive: rakip arama
   | 'comp_waiting'   // Competitive: rakibin bitmesini bekleme
-  | 'comp_result';   // Competitive: maç sonucu
+  | 'comp_result'    // Competitive: maç sonucu
+  | 'settings';      // Ayarlar ekranı
 
 export type GameMode = 'solo' | 'competitive';

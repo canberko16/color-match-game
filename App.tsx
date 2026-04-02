@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Screen, GameMode, RGB, RoundResult } from './src/types';
 import { generateRandomColor, calculateScore } from './src/utils/colorUtils';
 import { getHighScore, saveHighScore, saveGameRecord } from './src/utils/storage';
+import { getSettings, saveSettings, AppSettings } from './src/utils/settings';
 import { getUserId, getTrophies, updateTrophies } from './src/utils/userProfile';
 import {
   joinQueue,
@@ -17,6 +18,7 @@ import { calculateTrophyDelta } from './src/utils/mmr';
 
 import ErrorBoundary           from './src/components/ErrorBoundary';
 import HomeScreen              from './src/screens/HomeScreen';
+import SettingsScreen          from './src/screens/SettingsScreen';
 import ColorRevealScreen       from './src/screens/ColorRevealScreen';
 import GuessScreen             from './src/screens/GuessScreen';
 import RoundResultScreen       from './src/screens/RoundResultScreen';
@@ -42,6 +44,9 @@ export default function App() {
   const [highScore,      setHighScore]      = useState(0);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
 
+  // ── Ayarlar ──────────────────────────────────────────────────────────────────
+  const [settings, setSettings] = useState<AppSettings>({ hapticsEnabled: true, soundEnabled: true });
+
   // ── Kullanıcı profili ─────────────────────────────────────────────────────────
   const [userId,   setUserId]   = useState('');
   const [trophies, setTrophies] = useState(500);
@@ -63,15 +68,17 @@ export default function App() {
     let active = true;
     (async () => {
       try {
-        const [id, t, hs] = await Promise.all([
+        const [id, t, hs, s] = await Promise.all([
           getUserId(),
           getTrophies(),
           getHighScore(),
+          getSettings(),
         ]);
         if (!active) return;
         setUserId(id);
         setTrophies(t);
         setHighScore(hs);
+        setSettings(s);
       } catch (e) {
         console.warn('[App] profil yüklenemedi:', e);
       }
@@ -306,8 +313,18 @@ export default function App() {
           <HomeScreen
             onPlay={startSoloGame}
             onCompetitive={startMatchmaking}
+            onSettings={() => setScreen('settings')}
             highScore={highScore}
             trophies={trophies}
+          />
+        );
+
+      case 'settings':
+        return (
+          <SettingsScreen
+            settings={settings}
+            onSettingsChange={setSettings}
+            onBack={() => setScreen('home')}
           />
         );
 
@@ -320,6 +337,7 @@ export default function App() {
             currentRound={currentRound}
             totalRounds={totalRounds}
             onRevealComplete={handleRevealComplete}
+            onHome={handleGoHome}
           />
         );
 
@@ -332,6 +350,7 @@ export default function App() {
             totalRounds={totalRounds}
             previousRounds={rounds}
             onConfirm={handleGuessConfirm}
+            onHome={handleGoHome}
           />
         );
 
@@ -345,6 +364,7 @@ export default function App() {
             totalRounds={totalRounds}
             isLastRound={currentRound >= totalRounds}
             onNext={handleNextRound}
+            onHome={handleGoHome}
           />
         );
 

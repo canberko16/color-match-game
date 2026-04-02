@@ -16,8 +16,8 @@ import { getTopScores, GameRecord } from '../utils/storage';
 import { getScoreColor } from '../utils/colorUtils';
 import { COLORS, FONT_SIZE, SPACING, RADIUS } from '../constants/theme';
 
-const APP_STORE_ID    = '6761482277';
-const GITHUB_ISSUES   = 'https://github.com/canberko16/color-match-game/issues/new';
+const APP_STORE_ID  = '6761482277';
+const GITHUB_ISSUES = 'https://github.com/canberko16/color-match-game/issues/new';
 
 interface Blob {
   color: string;
@@ -30,6 +30,7 @@ interface Blob {
 interface Props {
   onPlay: () => void;
   onCompetitive: () => void;
+  onSettings: () => void;
   highScore: number;
   trophies: number;
 }
@@ -41,7 +42,7 @@ const BLOBS: Blob[] = [
   { color: '#A78BFA40', size: 100, top: 270, right:  10 },
 ];
 
-const HomeScreen: React.FC<Props> = ({ onPlay, onCompetitive, highScore, trophies }) => {
+const HomeScreen: React.FC<Props> = ({ onPlay, onCompetitive, onSettings, highScore, trophies }) => {
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
 
@@ -105,6 +106,11 @@ const HomeScreen: React.FC<Props> = ({ onPlay, onCompetitive, highScore, trophie
         <Animated.View
           style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
         >
+          {/* ── Ayarlar butonu ── */}
+          <TouchableOpacity onPress={onSettings} style={styles.settingsBtn} activeOpacity={0.7}>
+            <Text style={styles.settingsBtnText}>⚙️</Text>
+          </TouchableOpacity>
+
           {/* ── Logo + başlık ── */}
           <View style={styles.logoSection}>
             <View style={styles.logoGrid}>
@@ -288,6 +294,14 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center',
   },
   actionBtnText: { color: COLORS.textSecondary, fontSize: FONT_SIZE.sm, fontWeight: '700' },
+
+  settingsBtn: {
+    position: 'absolute', top: SPACING.sm, right: 0,
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  settingsBtnText: { fontSize: 18 },
 
   copyright: { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, textAlign: 'center', letterSpacing: 0.2 },
 
