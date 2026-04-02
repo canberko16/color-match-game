@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -35,6 +35,11 @@ interface Props {
   trophies: number;
 }
 
+const formatDate = (iso: string): string => {
+  const d = new Date(iso);
+  return `${d.getDate().toString().padStart(2,'0')}.${(d.getMonth()+1).toString().padStart(2,'0')}.${d.getFullYear()}`;
+};
+
 const BLOBS: Blob[] = [
   { color: '#FF6B6B50', size: 140, top: 50,  left: -40  },
   { color: '#4ECDC450', size: 110, top: 70,  right: -25 },
@@ -62,8 +67,7 @@ const HomeScreen: React.FC<Props> = ({ onPlay, onCompetitive, onSettings, highSc
     setShowTop5(true);
   }, []);
 
-  const handlePlay        = useCallback(() => onPlay(), [onPlay]);
-  const handleCompetitive = useCallback(() => onCompetitive(), [onCompetitive]);
+  const handlePlay = useCallback(() => onPlay(), [onPlay]);
 
   const handleBugReport = useCallback(() => {
     Linking.openURL(GITHUB_ISSUES).catch(() => {});
@@ -75,12 +79,7 @@ const HomeScreen: React.FC<Props> = ({ onPlay, onCompetitive, onSettings, highSc
     ).catch(() => {});
   }, []);
 
-  const tier: Tier = getTier(trophies);
-
-  const formatDate = (iso: string) => {
-    const d = new Date(iso);
-    return `${d.getDate().toString().padStart(2,'0')}.${(d.getMonth()+1).toString().padStart(2,'0')}.${d.getFullYear()}`;
-  };
+  const tier = useMemo((): Tier => getTier(trophies), [trophies]);
 
   return (
     <View style={styles.container}>
@@ -156,14 +155,11 @@ const HomeScreen: React.FC<Props> = ({ onPlay, onCompetitive, onSettings, highSc
               </LinearGradient>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={handleCompetitive} activeOpacity={0.85}>
-              <LinearGradient
-                colors={['#FF6B35', '#FF2D55']}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={styles.primaryButton}
-              >
-                <Text style={styles.primaryButtonText}>⚔️  Rekabetçi</Text>
-              </LinearGradient>
+            <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.6} disabled>
+              <Text style={styles.secondaryButtonText}>⚔️  Rekabetçi Mod</Text>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>Yakında</Text>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.6} disabled>

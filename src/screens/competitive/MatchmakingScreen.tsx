@@ -11,8 +11,8 @@ import {
 import { getTier } from '../../utils/mmr';
 import { COLORS, FONT_SIZE, SPACING, RADIUS } from '../../constants/theme';
 
-/** Rakip arama zaman aşımı (ms) — bu süre dolunca kullanıcıya bilgi verilir */
-const MATCHMAKING_TIMEOUT_MS = 60_000;
+/** Rakip arama zaman aşımı (ms) — bu süre dolunca arama iptal edilir */
+const MATCHMAKING_TIMEOUT_MS = 30_000;
 
 interface Props {
   trophies: number;
@@ -74,9 +74,11 @@ const MatchmakingScreen: React.FC<Props> = ({
       setElapsed((prev) => prev + 1);
     }, 1000);
 
-    // Zaman aşımı
+    // Zaman aşımı — UI'da göster, 3 saniye sonra otomatik iptal et
     const timeout = setTimeout(() => {
+      if (waitingForOpponent) return; // rakip bekleme modunda timeout uygulanmaz
       setTimedOut(true);
+      setTimeout(() => onCancel(), 3000);
     }, MATCHMAKING_TIMEOUT_MS);
 
     // Tüm animasyonları ve timer'ları temizle

@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Screen, GameMode, RGB, RoundResult } from './src/types';
 import { generateRandomColor, calculateScore } from './src/utils/colorUtils';
 import { getHighScore, saveHighScore, saveGameRecord } from './src/utils/storage';
-import { getSettings, saveSettings, AppSettings } from './src/utils/settings';
+import { initSettings } from './src/utils/settings';
 import { getUserId, getTrophies, updateTrophies } from './src/utils/userProfile';
 import {
   joinQueue,
@@ -26,67 +26,54 @@ import GameOverScreen          from './src/screens/GameOverScreen';
 import MatchmakingScreen       from './src/screens/competitive/MatchmakingScreen';
 import CompetitiveResultScreen from './src/screens/competitive/CompetitiveResultScreen';
 
-// ─── Sabitler ─────────────────────────────────────────────────────────────────
 const SOLO_ROUNDS = 5;
 
 export default function App() {
-  // ── Ekran ve mod ──────────────────────────────────────────────────────────────
-  const [screen,    setScreen]    = useState<Screen>('home');
-  const [gameMode,  setGameMode]  = useState<GameMode>('solo');
+  const [screen,   setScreen]   = useState<Screen>('home');
+  const [gameMode, setGameMode] = useState<GameMode>('solo');
 
-  // ── Oyun state'i ──────────────────────────────────────────────────────────────
-  const [currentRound,  setCurrentRound]  = useState(1);
-  const [currentColor,  setCurrentColor]  = useState<RGB | null>(null);
-  const [rounds,        setRounds]        = useState<RoundResult[]>([]);
-  const [lastResult,    setLastResult]    = useState<RoundResult | null>(null);
+  const [currentRound, setCurrentRound] = useState(1);
+  const [currentColor, setCurrentColor] = useState<RGB | null>(null);
+  const [rounds,       setRounds]       = useState<RoundResult[]>([]);
+  const [lastResult,   setLastResult]   = useState<RoundResult | null>(null);
 
-  // ── Solo ──────────────────────────────────────────────────────────────────────
   const [highScore,      setHighScore]      = useState(0);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
 
-  // ── Ayarlar ──────────────────────────────────────────────────────────────────
-  const [settings, setSettings] = useState<AppSettings>({ hapticsEnabled: true, soundEnabled: true });
-
-  // ── Kullanıcı profili ─────────────────────────────────────────────────────────
   const [userId,   setUserId]   = useState('');
   const [trophies, setTrophies] = useState(500);
 
-  // ── Competitive ──────────────────────────────────────────────────────────────
   const [currentMatch,   setCurrentMatch]   = useState<CompMatch | null>(null);
   const [opponentScores, setOpponentScores] = useState<number[]>([]);
   const [compColors,     setCompColors]     = useState<RGB[]>([]);
   const [trophyDelta,    setTrophyDelta]    = useState(0);
 
-  // Listener temizlik ref'leri — bileşen unmount olsa da doğru çalışır
-  const cancelQueueRef    = useRef<(() => void) | null>(null);
-  const stopMatchRef      = useRef<(() => void) | null>(null);
-  // resolveCompResult'ın yalnızca bir kez çalışmasını garantile
-  const compResolvedRef   = useRef(false);
+  const cancelQueueRef  = useRef<(() => void) | null>(null);
+  const stopMatchRef    = useRef<(() => void) | null>(null);
+  const compResolvedRef = useRef(false);
 
-  // ── Uygulama başlangıcı: profil yükle ────────────────────────────────────────
+  // ── Başlangıç: profil + ayarları yükle ──────────────────────────────────────
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const [id, t, hs, s] = await Promise.all([
+        const [id, t, hs] = await Promise.all([
           getUserId(),
           getTrophies(),
           getHighScore(),
-          getSettings(),
+          initSettings(), // cache'i doldurur, void döner
         ]);
         if (!active) return;
         setUserId(id);
         setTrophies(t);
         setHighScore(hs);
-        setSettings(s);
       } catch (e) {
-        console.warn('[App] profil yüklenemedi:', e);
+        console.warn('[App] başlatma hatası:', e);
       }
     })();
     return () => { active = false; };
   }, []);
 
-  // ── Temizlik: uygulama kapanırken aktif listener'ları durdur ──────────────────
   useEffect(() => {
     return () => {
       stopMatchRef.current?.();
@@ -108,9 +95,7 @@ export default function App() {
     setScreen('reveal');
   }, []);
 
-  const handleRevealComplete = useCallback(() => {
-    setScreen('guess');
-  }, []);
+  const handleRevealComplete = useCallback(() => setScreen('guess'), []);
 
   const handleGuessConfirm = useCallback(
     async (guess: RGB) => {
@@ -118,29 +103,20 @@ export default function App() {
 
       const score = calculateScore(currentColor, guess);
       const result: RoundResult = {
-        round:        currentRound,
-        targetColor:  currentColor,
-        guessedColor: guess,
-        score,
+        round: currentRound, targetColor: currentColor, guessedColor: guess, score,
       };
-
       const updatedRounds = [...rounds, result];
       setLastResult(result);
       setRounds(updatedRounds);
 
-      // Competitive: güncel skoru Firebase'e gönder
       if (gameMode === 'competitive' && currentMatch) {
-        const scoreArr = updatedRounds.map((r) => r.score);
-        submitRoundScores(currentMatch.id, userId, scoreArr).catch(() => {});
+        submitRoundScores(currentMatch.id, userId, updatedRounds.map(r => r.score)).catch(() => {});
       }
 
       setScreen('roundResult');
 
-      // Solo son round: high score kaydet
       if (gameMode === 'solo' && currentRound === SOLO_ROUNDS) {
-        const avg = Math.round(
-          updatedRounds.reduce((s, r) => s + r.score, 0) / updatedRounds.length
-        );
+        const avg = Math.round(updatedRounds.reduce((s, r) => s + r.score, 0) / updatedRounds.length);
         try {
           const isNew = await saveHighScore(avg);
           setIsNewHighScore(isNew);
@@ -152,7 +128,7 @@ export default function App() {
             rounds: updatedRounds.length,
           });
         } catch (e) {
-          console.warn('[App] high score kaydedilemedi:', e);
+          console.warn('[App] skor kaydedilemedi:', e);
         }
       }
     },
@@ -160,24 +136,17 @@ export default function App() {
   );
 
   const handleNextRound = useCallback(() => {
-    const totalRounds = gameMode === 'competitive' ? TOTAL_COMP_ROUNDS : SOLO_ROUNDS;
-
-    if (currentRound >= totalRounds) {
-      if (gameMode === 'solo') {
-        setScreen('gameOver');
-      } else {
-        // Competitive: rakibin bitmesini bekle
-        setScreen('comp_waiting');
-      }
+    const total = gameMode === 'competitive' ? TOTAL_COMP_ROUNDS : SOLO_ROUNDS;
+    if (currentRound >= total) {
+      setScreen(gameMode === 'solo' ? 'gameOver' : 'comp_waiting');
     } else {
       const next = currentRound + 1;
       setCurrentRound(next);
-      if (gameMode === 'competitive') {
-        // Firebase'den gelen rengi kullan; güvenli erişim
-        setCurrentColor(compColors[next - 1] ?? generateRandomColor());
-      } else {
-        setCurrentColor(generateRandomColor());
-      }
+      setCurrentColor(
+        gameMode === 'competitive'
+          ? (compColors[next - 1] ?? generateRandomColor())
+          : generateRandomColor()
+      );
       setScreen('reveal');
     }
   }, [currentRound, gameMode, compColors]);
@@ -186,61 +155,45 @@ export default function App() {
   // COMPETITIVE
   // ─────────────────────────────────────────────────────────────────────────────
 
-  /** İki oyuncu da bitirdiğinde kupa hesapla ve sonuç ekranını göster */
   const resolveCompResult = useCallback(
     async (myScores: number[], oppScores: number[]) => {
-      // Yalnızca bir kez çalış (listener birden fazla kez tetikleyebilir)
       if (compResolvedRef.current) return;
       compResolvedRef.current = true;
-
       stopMatchRef.current?.();
       stopMatchRef.current = null;
 
-      const myTotal  = myScores.reduce((s, v) => s + v, 0);
-      const oppTotal = oppScores.reduce((s, v) => s + v, 0);
-      const delta    = calculateTrophyDelta(myTotal, oppTotal);
-
+      const delta = calculateTrophyDelta(
+        myScores.reduce((s, v) => s + v, 0),
+        oppScores.reduce((s, v) => s + v, 0)
+      );
       try {
         const newTotal = await updateTrophies(delta);
         setTrophies(newTotal);
       } catch (e) {
         console.warn('[App] kupa güncellenemedi:', e);
       }
-
       setTrophyDelta(delta);
       setOpponentScores(oppScores);
-
-      if (currentMatch) {
-        clearUserMatch(userId).catch(() => {});
-      }
-
+      if (currentMatch) clearUserMatch(userId).catch(() => {});
       setScreen('comp_result');
     },
     [currentMatch, userId]
   );
 
-  /** Maç bulunduğunda çağrılır — oyunu başlatır ve listener kurar */
   const handleMatchFound = useCallback(
     (match: CompMatch) => {
-      // Önceki match listener'ını durdur
       stopMatchRef.current?.();
       compResolvedRef.current = false;
-
       setCurrentMatch(match);
       setCompColors(match.colors);
 
-      // Maçı gerçek zamanlı dinle
       const stopListen = listenToMatch(match.id, (updated) => {
-        const oppId     = updated.players.find((p) => p !== userId);
+        const oppId     = updated.players.find(p => p !== userId);
         if (!oppId) return;
         const oppScores = updated.scores?.[oppId] ?? [];
         const myScores  = updated.scores?.[userId] ?? [];
         setOpponentScores(oppScores);
-
-        if (
-          myScores.length  >= TOTAL_COMP_ROUNDS &&
-          oppScores.length >= TOTAL_COMP_ROUNDS
-        ) {
+        if (myScores.length >= TOTAL_COMP_ROUNDS && oppScores.length >= TOTAL_COMP_ROUNDS) {
           resolveCompResult(myScores, oppScores);
         }
       });
@@ -249,7 +202,6 @@ export default function App() {
       setCurrentRound(1);
       setRounds([]);
       setLastResult(null);
-      // İlk rengi güvenli şekilde al
       setCurrentColor(match.colors[0] ?? generateRandomColor());
       setScreen('reveal');
     },
@@ -258,11 +210,8 @@ export default function App() {
 
   const startMatchmaking = useCallback(async () => {
     if (!userId) return;
-
-    // Önceki kuyruğu temizle
     cancelQueueRef.current?.();
     cancelQueueRef.current = null;
-
     setGameMode('competitive');
     setCurrentRound(1);
     setRounds([]);
@@ -271,7 +220,6 @@ export default function App() {
     setCurrentMatch(null);
     compResolvedRef.current = false;
     setScreen('matchmaking');
-
     try {
       const cancel = await joinQueue(userId, trophies, handleMatchFound);
       cancelQueueRef.current = cancel;
@@ -307,7 +255,6 @@ export default function App() {
 
   const renderScreen = (): React.ReactNode => {
     switch (screen) {
-
       case 'home':
         return (
           <HomeScreen
@@ -320,13 +267,7 @@ export default function App() {
         );
 
       case 'settings':
-        return (
-          <SettingsScreen
-            settings={settings}
-            onSettingsChange={setSettings}
-            onBack={() => setScreen('home')}
-          />
-        );
+        return <SettingsScreen onBack={() => setScreen('home')} />;
 
       case 'reveal':
         if (!currentColor) return null;
@@ -379,21 +320,10 @@ export default function App() {
         );
 
       case 'matchmaking':
-        return (
-          <MatchmakingScreen
-            trophies={trophies}
-            onCancel={cancelMatchmaking}
-          />
-        );
+        return <MatchmakingScreen trophies={trophies} onCancel={cancelMatchmaking} />;
 
       case 'comp_waiting':
-        return (
-          <MatchmakingScreen
-            trophies={trophies}
-            onCancel={handleGoHome}
-            waitingForOpponent
-          />
-        );
+        return <MatchmakingScreen trophies={trophies} onCancel={handleGoHome} waitingForOpponent />;
 
       case 'comp_result':
         return (

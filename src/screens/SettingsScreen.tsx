@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,38 +8,36 @@ import {
   SafeAreaView,
   ScrollView,
 } from 'react-native';
-import { AppSettings, saveSettings } from '../utils/settings';
+import { getSettings, updateSetting, AppSettings } from '../utils/settings';
 import { COLORS, FONT_SIZE, SPACING, RADIUS } from '../constants/theme';
 
 interface Props {
-  settings: AppSettings;
-  onSettingsChange: (s: AppSettings) => void;
   onBack: () => void;
 }
 
-const SettingsScreen: React.FC<Props> = ({ settings, onSettingsChange, onBack }) => {
+const SettingsScreen: React.FC<Props> = ({ onBack }) => {
+  // Cache'den senkron oku — initSettings() uygulama başında çağrıldığı için güncel
+  const [settings, setSettings] = useState<AppSettings>(getSettings);
 
   const toggle = useCallback((key: keyof AppSettings) => {
-    const updated = { ...settings, [key]: !settings[key] };
-    onSettingsChange(updated);
-    saveSettings(updated).catch(() => {});
-  }, [settings, onSettingsChange]);
+    const newValue = !settings[key];
+    setSettings(prev => ({ ...prev, [key]: newValue }));
+    updateSetting(key, newValue).catch(() => {});
+  }, [settings]);
 
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe}>
-        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} style={styles.backBtn} activeOpacity={0.7}>
+          <TouchableOpacity onPress={onBack} style={styles.backBtnArea} activeOpacity={0.7}>
             <Text style={styles.backText}>← Geri</Text>
           </TouchableOpacity>
           <Text style={styles.title}>Ayarlar</Text>
-          <View style={styles.backBtn} />
+          <View style={styles.backBtnArea} />
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-          {/* Ses & Titreşim */}
           <Text style={styles.sectionLabel}>Ses ve Geri Bildirim</Text>
           <View style={styles.card}>
 
@@ -61,7 +59,7 @@ const SettingsScreen: React.FC<Props> = ({ settings, onSettingsChange, onBack })
 
             <View style={styles.divider} />
 
-            <View style={styles.row}>
+            <View style={[styles.row, styles.rowDisabled]}>
               <View style={styles.rowLeft}>
                 <Text style={styles.rowIcon}>🔊</Text>
                 <View>
@@ -70,16 +68,15 @@ const SettingsScreen: React.FC<Props> = ({ settings, onSettingsChange, onBack })
                 </View>
               </View>
               <Switch
-                value={settings.soundEnabled}
-                onValueChange={() => toggle('soundEnabled')}
+                value={false}
+                disabled
                 trackColor={{ false: COLORS.border, true: '#6C63FF' }}
                 thumbColor="#FFF"
-                disabled
               />
             </View>
+
           </View>
 
-          {/* Uygulama bilgisi */}
           <Text style={styles.sectionLabel}>Uygulama</Text>
           <View style={styles.card}>
             <View style={styles.row}>
@@ -115,9 +112,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl, paddingVertical: SPACING.md,
     borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
-  backBtn:  { width: 70 },
-  backText: { color: '#6C63FF', fontSize: FONT_SIZE.md, fontWeight: '700' },
-  title:    { color: COLORS.text, fontSize: FONT_SIZE.lg, fontWeight: '800' },
+  backBtnArea: { width: 70 },
+  backText:    { color: '#6C63FF', fontSize: FONT_SIZE.md, fontWeight: '700' },
+  title:       { color: COLORS.text, fontSize: FONT_SIZE.lg, fontWeight: '800' },
 
   sectionLabel: {
     color: COLORS.textMuted, fontSize: FONT_SIZE.xs, fontWeight: '700',
@@ -132,6 +129,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md,
   },
+  rowDisabled: { opacity: 0.45 },
   rowLeft:  { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, flex: 1 },
   rowIcon:  { fontSize: 22 },
   rowTitle: { color: COLORS.text, fontSize: FONT_SIZE.md, fontWeight: '600' },

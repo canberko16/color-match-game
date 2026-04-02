@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,14 @@ import { RoundResult } from '../types';
 import { rgbToString, getScoreColor, getScoreComment, getScoreEmoji } from '../utils/colorUtils';
 import { COLORS, FONT_SIZE, SPACING, RADIUS } from '../constants/theme';
 
+const getGradeLabel = (avg: number): string => {
+  if (avg >= 90) return 'Renk Ustası 🎨';
+  if (avg >= 75) return 'Renk Dedektifi 🔍';
+  if (avg >= 55) return 'Renk Avcısı 🏹';
+  if (avg >= 35) return 'Renk Çömezi 🌱';
+  return 'Yeni Başlayan 💪';
+};
+
 interface Props {
   rounds: RoundResult[];
   isNewHighScore: boolean;
@@ -27,12 +35,11 @@ const GameOverScreen: React.FC<Props> = ({
   onPlayAgain,
   onHome,
 }) => {
-  // Edge case: boş rounds dizisi için güvenli hesaplama
-  const safeRounds = rounds.length > 0 ? rounds : [];
-  const totalScore   = safeRounds.reduce((sum, r) => sum + r.score, 0);
-  const averageScore = safeRounds.length > 0
-    ? Math.round(totalScore / safeRounds.length)
-    : 0;
+  const totalScore   = useMemo(() => rounds.reduce((sum, r) => sum + r.score, 0), [rounds]);
+  const averageScore = useMemo(
+    () => rounds.length > 0 ? Math.round(totalScore / rounds.length) : 0,
+    [rounds.length, totalScore]
+  );
 
   const [displayAverage, setDisplayAverage] = useState(0);
   const [isNavigating,   setIsNavigating]   = useState(false);
@@ -86,14 +93,6 @@ const GameOverScreen: React.FC<Props> = ({
 
   const avgScoreColor = getScoreColor(averageScore);
 
-  const getGradeLabel = (avg: number): string => {
-    if (avg >= 90) return 'Renk Ustası 🎨';
-    if (avg >= 75) return 'Renk Dedektifi 🔍';
-    if (avg >= 55) return 'Renk Avcısı 🏹';
-    if (avg >= 35) return 'Renk Çömezi 🌱';
-    return 'Yeni Başlayan 💪';
-  };
-
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe}>
@@ -130,10 +129,10 @@ const GameOverScreen: React.FC<Props> = ({
             </View>
 
             {/* ── Round detayları ── */}
-            {safeRounds.length > 0 && (
+            {rounds.length > 0 && (
               <View style={styles.breakdownCard}>
                 <Text style={styles.sectionTitle}>Round Detayları</Text>
-                {safeRounds.map((r) => {
+                {rounds.map((r) => {
                   const sc = getScoreColor(r.score);
                   return (
                     <View key={r.round} style={styles.roundRow}>

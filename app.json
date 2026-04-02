@@ -20,7 +20,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.canberkakatay.colormatch",
-      "buildNumber": "4",
+      "buildNumber": "6",
       "supportsTablet": false,
       "requireFullScreen": true,
       "infoPlist": {

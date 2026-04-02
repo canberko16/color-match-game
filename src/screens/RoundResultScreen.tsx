@@ -28,6 +28,8 @@ import { COLORS, FONT_SIZE, SPACING, RADIUS } from '../constants/theme';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 
+type ZoomSide = 'target' | 'guess';
+
 interface Props {
   result: RoundResult;
   allRounds: RoundResult[];
@@ -51,7 +53,6 @@ const RoundResultScreen: React.FC<Props> = ({
   const [isNavigating, setIsNavigating] = useState(false);
 
   // Zoom state
-  type ZoomSide = 'target' | 'guess';
   const [zoomVisible, setZoomVisible] = useState(false);
   const [zoomSide, setZoomSide]       = useState<ZoomSide>('target');
 
@@ -61,9 +62,7 @@ const RoundResultScreen: React.FC<Props> = ({
   const zoomSlide = useRef(new Animated.Value(SCREEN_H)).current;
 
   // Ref'ler sayesinde panResponder oluşturma sırasındaki closure sorunu çözülür
-  const zoomSlideRef   = useRef(zoomSlide);
-  const zoomVisibleRef = useRef(zoomVisible);
-  useEffect(() => { zoomVisibleRef.current = zoomVisible; }, [zoomVisible]);
+  const zoomSlideRef = useRef(zoomSlide);
 
   const closeZoom = useCallback(() => {
     Animated.timing(zoomSlide, {
