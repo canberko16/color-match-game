@@ -103,7 +103,9 @@ const ColorRevealScreen: React.FC<Props> = ({
     <View style={styles.container}>
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
-          <Text style={styles.roundText}>Round {currentRound} / {totalRounds}</Text>
+          <Text style={styles.roundText}>
+            {totalRounds === 1 ? 'Gunun Rengi' : `Round ${currentRound} / ${totalRounds}`}
+          </Text>
           <TouchableOpacity onPress={handleHome} style={styles.homeBtn} activeOpacity={0.7}>
             <Text style={styles.homeBtnText}>🏠</Text>
           </TouchableOpacity>

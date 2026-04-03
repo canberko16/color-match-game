@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
 
-import { Screen, GameMode, RGB, RoundResult } from './src/types';
+import { Screen, GameMode, RGB, RoundResult, DailyAttempt } from './src/types';
 import { generateRandomColor, calculateScore } from './src/utils/colorUtils';
-import { getHighScore, saveHighScore, saveGameRecord } from './src/utils/storage';
+import { getHighScore, saveHighScore, saveGameRecord, getStreak, updateStreak } from './src/utils/storage';
+import { getDailyColor, getDateKey } from './src/utils/dailyColor';
+import { getDailyAttempt, saveDailyAttempt } from './src/utils/dailyStorage';
+import { submitDailyScore } from './src/utils/dailyLeaderboard';
 import { initSettings } from './src/utils/settings';
 import { getUserId, getTrophies, updateTrophies } from './src/utils/userProfile';
 import {
@@ -25,6 +28,8 @@ import RoundResultScreen       from './src/screens/RoundResultScreen';
 import GameOverScreen          from './src/screens/GameOverScreen';
 import MatchmakingScreen       from './src/screens/competitive/MatchmakingScreen';
 import CompetitiveResultScreen from './src/screens/competitive/CompetitiveResultScreen';
+import DailyCalendarScreen     from './src/screens/daily/DailyCalendarScreen';
+import DailyResultScreen       from './src/screens/daily/DailyResultScreen';
 
 const SOLO_ROUNDS = 5;
 
@@ -39,6 +44,7 @@ export default function App() {
 
   const [highScore,      setHighScore]      = useState(0);
   const [isNewHighScore, setIsNewHighScore] = useState(false);
+  const [streak,         setStreak]         = useState(0);
 
   const [userId,   setUserId]   = useState('');
   const [trophies, setTrophies] = useState(500);
@@ -47,6 +53,10 @@ export default function App() {
   const [opponentScores, setOpponentScores] = useState<number[]>([]);
   const [compColors,     setCompColors]     = useState<RGB[]>([]);
   const [trophyDelta,    setTrophyDelta]    = useState(0);
+
+  // Daily challenge state
+  const [dailyDateKey, setDailyDateKey] = useState('');
+  const [dailyAttempt, setDailyAttempt] = useState<DailyAttempt | null>(null);
 
   const cancelQueueRef  = useRef<(() => void) | null>(null);
   const stopMatchRef    = useRef<(() => void) | null>(null);
@@ -57,16 +67,18 @@ export default function App() {
     let active = true;
     (async () => {
       try {
-        const [id, t, hs] = await Promise.all([
+        const [id, t, hs, st] = await Promise.all([
           getUserId(),
           getTrophies(),
           getHighScore(),
+          getStreak(),
           initSettings(), // cache'i doldurur, void döner
         ]);
         if (!active) return;
         setUserId(id);
         setTrophies(t);
         setHighScore(hs);
+        setStreak(st);
       } catch (e) {
         console.warn('[App] başlatma hatası:', e);
       }
@@ -98,8 +110,14 @@ export default function App() {
   const handleRevealComplete = useCallback(() => setScreen('guess'), []);
 
   const handleGuessConfirm = useCallback(
-    async (guess: RGB) => {
+    async (guess: RGB, timeMs?: number) => {
       if (!currentColor) return;
+
+      // Daily modda ayrı handler'a yönlendir
+      if (gameMode === 'daily') {
+        handleDailyGuessConfirm(guess, timeMs);
+        return;
+      }
 
       const score = calculateScore(currentColor, guess);
       const result: RoundResult = {
@@ -113,7 +131,8 @@ export default function App() {
         submitRoundScores(currentMatch.id, userId, updatedRounds.map(r => r.score)).catch(() => {});
       }
 
-      setScreen('roundResult');
+      // Daily modda roundResult'a değil dailyResult'a gider (handleDailyGuessConfirm ile)
+      if (gameMode !== 'daily') setScreen('roundResult');
 
       if (gameMode === 'solo' && currentRound === SOLO_ROUNDS) {
         const avg = Math.round(updatedRounds.reduce((s, r) => s + r.score, 0) / updatedRounds.length);
@@ -127,12 +146,14 @@ export default function App() {
             totalScore: updatedRounds.reduce((s, r) => s + r.score, 0),
             rounds: updatedRounds.length,
           });
+          const newStreak = await updateStreak();
+          setStreak(newStreak);
         } catch (e) {
           console.warn('[App] skor kaydedilemedi:', e);
         }
       }
     },
-    [currentColor, currentRound, rounds, gameMode, currentMatch, userId]
+    [currentColor, currentRound, rounds, gameMode, currentMatch, userId, handleDailyGuessConfirm]
   );
 
   const handleNextRound = useCallback(() => {
@@ -150,6 +171,60 @@ export default function App() {
       setScreen('reveal');
     }
   }, [currentRound, gameMode, compColors]);
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // DAILY CHALLENGE
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const openDailyCalendar = useCallback(() => {
+    setScreen('dailyCalendar');
+  }, []);
+
+  const startDailyChallenge = useCallback((dateKey: string) => {
+    setGameMode('daily');
+    setDailyDateKey(dateKey);
+    setDailyAttempt(null);
+    setCurrentRound(1);
+    setRounds([]);
+    setLastResult(null);
+    setCurrentColor(getDailyColor(dateKey));
+    setScreen('reveal');
+  }, []);
+
+  const handleDailyGuessConfirm = useCallback(
+    async (guess: RGB, timeMs?: number) => {
+      if (!currentColor || !dailyDateKey) return;
+
+      const score = calculateScore(currentColor, guess);
+      const attempt: DailyAttempt = {
+        dateKey: dailyDateKey,
+        targetColor: currentColor,
+        guessedColor: guess,
+        score,
+        timeMs: timeMs ?? 0,
+        completedAt: Date.now(),
+      };
+
+      setDailyAttempt(attempt);
+      await saveDailyAttempt(attempt);
+      submitDailyScore(dailyDateKey, userId, score, attempt.timeMs).catch(() => {});
+
+      const newStreak = await updateStreak();
+      setStreak(newStreak);
+
+      setScreen('dailyResult');
+    },
+    [currentColor, dailyDateKey, userId]
+  );
+
+  const handleViewDailyResult = useCallback(async (dateKey: string) => {
+    const attempt = await getDailyAttempt(dateKey);
+    if (attempt) {
+      setDailyAttempt(attempt);
+      setDailyDateKey(dateKey);
+      setScreen('dailyResult');
+    }
+  }, []);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // COMPETITIVE
@@ -251,7 +326,7 @@ export default function App() {
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const totalRounds = gameMode === 'competitive' ? TOTAL_COMP_ROUNDS : SOLO_ROUNDS;
+  const totalRounds = gameMode === 'daily' ? 1 : gameMode === 'competitive' ? TOTAL_COMP_ROUNDS : SOLO_ROUNDS;
 
   const renderScreen = (): React.ReactNode => {
     switch (screen) {
@@ -260,9 +335,11 @@ export default function App() {
           <HomeScreen
             onPlay={startSoloGame}
             onCompetitive={startMatchmaking}
+            onDailyChallenge={openDailyCalendar}
             onSettings={() => setScreen('settings')}
             highScore={highScore}
             trophies={trophies}
+            streak={streak}
           />
         );
 
@@ -292,6 +369,7 @@ export default function App() {
             previousRounds={rounds}
             onConfirm={handleGuessConfirm}
             onHome={handleGoHome}
+            isDaily={gameMode === 'daily'}
           />
         );
 
@@ -334,6 +412,25 @@ export default function App() {
             newTrophyTotal={trophies}
             onPlayAgain={startMatchmaking}
             onHome={handleGoHome}
+          />
+        );
+
+      case 'dailyCalendar':
+        return (
+          <DailyCalendarScreen
+            onPlayDay={startDailyChallenge}
+            onViewResult={handleViewDailyResult}
+            onBack={() => setScreen('home')}
+          />
+        );
+
+      case 'dailyResult':
+        if (!dailyAttempt) return null;
+        return (
+          <DailyResultScreen
+            attempt={dailyAttempt}
+            userId={userId}
+            onBack={() => setScreen('dailyCalendar')}
           />
         );
 

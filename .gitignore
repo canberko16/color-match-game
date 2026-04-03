@@ -9,4 +9,6 @@ dist/
 *.mobileprovision
 *.orig.*
 web-build/
+ios/
+android/
 .DS_Store

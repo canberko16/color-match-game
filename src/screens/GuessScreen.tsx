@@ -21,8 +21,9 @@ interface Props {
   currentRound: number;
   totalRounds: number;
   previousRounds: RoundResult[];
-  onConfirm: (guess: RGB) => void;
+  onConfirm: (guess: RGB, timeMs?: number) => void;
   onHome: () => void;
+  isDaily?: boolean;
 }
 
 const GuessScreen: React.FC<Props> = ({
@@ -31,21 +32,33 @@ const GuessScreen: React.FC<Props> = ({
   previousRounds,
   onConfirm,
   onHome,
+  isDaily = false,
 }) => {
   const [r, setR] = useState(128);
   const [g, setG] = useState(128);
   const [b, setB] = useState(128);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
 
-  const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
+  const fadeAnim   = useRef(new Animated.Value(0)).current;
+  const slideAnim  = useRef(new Animated.Value(30)).current;
+  const startTime  = useRef(Date.now());
 
   useEffect(() => {
+    startTime.current = Date.now();
     Animated.parallel([
       Animated.timing(fadeAnim,  { toValue: 1, duration: 500, useNativeDriver: true }),
       Animated.spring(slideAnim, { toValue: 0, tension: 55, friction: 8, useNativeDriver: true }),
     ]).start();
-  }, []);
+
+    // Daily modda saniye sayaci
+    if (isDaily) {
+      const ticker = setInterval(() => {
+        setElapsed(Math.floor((Date.now() - startTime.current) / 1000));
+      }, 1000);
+      return () => clearInterval(ticker);
+    }
+  }, [isDaily]);
 
   const handleR = useCallback((v: number) => setR(v), []);
   const handleG = useCallback((v: number) => setG(v), []);
@@ -57,7 +70,8 @@ const GuessScreen: React.FC<Props> = ({
     if (isSubmitting) return;
     setIsSubmitting(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    onConfirm({ r: Math.round(r), g: Math.round(g), b: Math.round(b) });
+    const timeMs = Date.now() - startTime.current;
+    onConfirm({ r: Math.round(r), g: Math.round(g), b: Math.round(b) }, timeMs);
   }, [isSubmitting, r, g, b, onConfirm]);
 
   const handleHome = useCallback(() => {
@@ -83,8 +97,12 @@ const GuessScreen: React.FC<Props> = ({
 
             {/* ── Header ── */}
             <View style={styles.header}>
-              <Text style={styles.roundText}>Round {currentRound} / {totalRounds}</Text>
-              <Text style={styles.title}>Rengi tahmin et</Text>
+              <Text style={styles.roundText}>
+                {isDaily ? `${elapsed}s` : `Round ${currentRound} / ${totalRounds}`}
+              </Text>
+              <Text style={styles.title}>
+                {isDaily ? 'Gunun Rengini Tahmin Et' : 'Rengi tahmin et'}
+              </Text>
               <TouchableOpacity onPress={handleHome} style={styles.homeBtn} activeOpacity={0.7}>
                 <Text style={styles.homeBtnText}>🏠</Text>
               </TouchableOpacity>
@@ -107,8 +125,8 @@ const GuessScreen: React.FC<Props> = ({
               <RGBSlider label="Blue"  value={b} trackColor={COLORS.blue}  onChange={handleB} />
             </View>
 
-            {/* ── Önceki roundlar ── */}
-            {previousRounds.length > 0 && (
+            {/* ── Önceki roundlar (daily modda gizle) ── */}
+            {!isDaily && previousRounds.length > 0 && (
               <View style={styles.historyCard}>
                 <Text style={styles.historyTitle}>Önceki roundlar</Text>
                 <RoundHistory rounds={previousRounds} totalRounds={totalRounds} />

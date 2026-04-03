@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "support-page",
+      "runtimeExecutable": "/usr/bin/python3",
+      "runtimeArgs": ["-m", "http.server", "3456", "--directory", "/Users/canberk/Kodlama/color-match/docs"],
+      "port": 3456
+    }
+  ]
+}

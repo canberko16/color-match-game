@@ -13,6 +13,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { getTier, Tier } from '../utils/mmr';
 import { getTopScores, GameRecord } from '../utils/storage';
+import DailyChallengeCard from '../components/DailyChallengeCard';
 import { getScoreColor } from '../utils/colorUtils';
 import { COLORS, FONT_SIZE, SPACING, RADIUS } from '../constants/theme';
 
@@ -30,9 +31,11 @@ interface Blob {
 interface Props {
   onPlay: () => void;
   onCompetitive: () => void;
+  onDailyChallenge: () => void;
   onSettings: () => void;
   highScore: number;
   trophies: number;
+  streak: number;
 }
 
 const formatDate = (iso: string): string => {
@@ -47,7 +50,7 @@ const BLOBS: Blob[] = [
   { color: '#A78BFA40', size: 100, top: 270, right:  10 },
 ];
 
-const HomeScreen: React.FC<Props> = ({ onPlay, onCompetitive, onSettings, highScore, trophies }) => {
+const HomeScreen: React.FC<Props> = ({ onPlay, onCompetitive, onDailyChallenge, onSettings, highScore, trophies, streak }) => {
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
 
@@ -121,27 +124,35 @@ const HomeScreen: React.FC<Props> = ({ onPlay, onCompetitive, onSettings, highSc
             <Text style={styles.subtitle}>Rengi gör, hatırla, tahmin et</Text>
           </View>
 
-          {/* ── Kupa / kademe kartı ── */}
-          <View style={styles.trophyRow}>
-            <View style={[styles.trophyCard, { borderColor: tier.color + '55' }]}>
-              <Text style={styles.trophyEmoji}>{tier.emoji}</Text>
-              <View>
-                <Text style={[styles.trophyTier, { color: tier.color }]}>{tier.name}</Text>
-                <Text style={styles.trophyCount}>{trophies} 🏆</Text>
-              </View>
+          {/* ── İstatistik kartları ── */}
+          <View style={styles.statsRow}>
+            <View style={[styles.statCard, { borderColor: tier.color + '55' }]}>
+              <Text style={styles.statEmoji}>{tier.emoji}</Text>
+              <Text style={[styles.statValue, { color: tier.color }]}>{tier.name}</Text>
+              <Text style={styles.statLabel}>{trophies} kupa</Text>
             </View>
+            {streak > 0 && (
+              <View style={[styles.statCard, { borderColor: '#FF6B3555' }]}>
+                <Text style={styles.statEmoji}>🔥</Text>
+                <Text style={[styles.statValue, { color: '#FF6B35' }]}>{streak}</Text>
+                <Text style={styles.statLabel}>Seri</Text>
+              </View>
+            )}
             {highScore > 0 && (
               <TouchableOpacity
-                style={styles.highScoreCard}
+                style={[styles.statCard, { borderColor: '#6C63FF44' }]}
                 onPress={handleShowTop5}
                 activeOpacity={0.75}
               >
-                <Text style={styles.highScoreLabel}>En iyi</Text>
-                <Text style={styles.highScoreValue}>{highScore}</Text>
-                <Text style={styles.highScoreTap}>Top 5 →</Text>
+                <Text style={styles.statEmoji}>🏅</Text>
+                <Text style={[styles.statValue, { color: '#A78BFA' }]}>{highScore}</Text>
+                <Text style={styles.statLabel}>En İyi</Text>
               </TouchableOpacity>
             )}
           </View>
+
+          {/* ── Gunluk Challenge ── */}
+          <DailyChallengeCard onPress={onDailyChallenge} />
 
           {/* ── Butonlar ── */}
           <View style={styles.buttons}>
@@ -252,22 +263,15 @@ const styles = StyleSheet.create({
   title:    { color: COLORS.text, fontSize: FONT_SIZE.xxl, fontWeight: '800', letterSpacing: -0.5, marginBottom: SPACING.xs },
   subtitle: { color: COLORS.textSecondary, fontSize: FONT_SIZE.md, textAlign: 'center' },
 
-  trophyRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.xl },
-  trophyCard: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm,
-    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SPACING.md, borderWidth: 1,
+  statsRow: { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.xl },
+  statCard: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg,
+    paddingVertical: SPACING.md, borderWidth: 1, gap: 2,
   },
-  trophyEmoji: { fontSize: 28 },
-  trophyTier:  { fontSize: FONT_SIZE.sm, fontWeight: '800', letterSpacing: 0.3 },
-  trophyCount: { color: COLORS.textSecondary, fontSize: FONT_SIZE.xs, fontWeight: '600', marginTop: 2 },
-  highScoreCard: {
-    backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: SPACING.md,
-    alignItems: 'center', justifyContent: 'center', borderWidth: 1,
-    borderColor: '#6C63FF44', minWidth: 80,
-  },
-  highScoreLabel: { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, fontWeight: '600', marginBottom: 2 },
-  highScoreValue: { color: '#A78BFA', fontSize: FONT_SIZE.lg, fontWeight: '900' },
-  highScoreTap:   { color: '#6C63FF99', fontSize: 10, fontWeight: '700', marginTop: 3 },
+  statEmoji: { fontSize: 24, marginBottom: 2 },
+  statValue: { fontSize: FONT_SIZE.md, fontWeight: '900' },
+  statLabel: { color: COLORS.textMuted, fontSize: FONT_SIZE.xs, fontWeight: '600' },
 
   buttons:       { gap: SPACING.md, marginBottom: SPACING.lg },
   primaryButton: { height: 56, borderRadius: RADIUS.round, justifyContent: 'center', alignItems: 'center' },
